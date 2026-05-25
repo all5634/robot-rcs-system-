@@ -161,3 +161,42 @@ wss.on('error', (err) => {
 });
 
 console.log(`[MockServer] 就绪 — 在浏览器打开 index.html 即可联调`);
+
+// ── 模拟成员A发送任务事件（每20秒跑一次完整任务流程）──
+function scheduleTaskSimulation(ws) {
+  setTimeout(() => {
+    if (ws.readyState !== WebSocket.OPEN) return;
+
+    const taskId   = 'task_' + Date.now();
+    const taskName = '避障直行综合任务';
+    const totalActions = 5;
+    const events = ['created', 'started', 'started', 'started', 'started', 'completed'];
+
+    events.forEach((event, i) => {
+      setTimeout(() => {
+        if (ws.readyState !== WebSocket.OPEN) return;
+        ws.send(JSON.stringify({
+          type:          'task_event',
+          event,
+          task_id:       taskId,
+          task_name:     taskName,
+          action_index:  Math.min(i, totalActions),
+          total_actions: totalActions,
+          timestamp:     Date.now()
+        }));
+        console.log(`[MockServer] 任务事件: ${event} ${i}/${totalActions}`);
+      }, i * 2000);
+    });
+
+    // 递归调度
+    setTimeout(() => scheduleTaskSimulation(ws), 25000);
+  }, 20000);
+}
+
+// 在connection事件里调用（追加到原有逻辑末尾）
+const _origOn = wss.listeners('connection')[0];
+wss.removeAllListeners('connection');
+wss.on('connection', (ws) => {
+  _origOn(ws);
+  scheduleTaskSimulation(ws);
+});

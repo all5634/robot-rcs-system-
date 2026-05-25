@@ -403,22 +403,48 @@ const ObstacleAvoidance = (() => {
   function init(sendCommandFn) {
     _sendCommand = sendCommandFn;
     _initCanvas();
-    LogSystem.info('视觉避障模块初始化完成');
+    LogSystem.info('ObstacleAvoidance', '视觉避障模块初始化完成');
   }
 
   /**
-   * 启动避障功能（对应"视觉避障"按钮）
+   * start() — 手动按钮触发，启动本地仿真检测循环
+   * 联调后此模式仍保留用于演示
    */
   function start() {
     if (_active) return;
     _active = true;
     _setState(STATE.DETECTING);
     _startDetectionLoop();
-    LogSystem.info('视觉避障功能已启用，开始扫描前方障碍');
+    LogSystem.info('ObstacleAvoidance', '视觉避障已启用（仿真检测模式）');
   }
 
   /**
-   * 停止避障功能（紧急停止时调用）
+   * triggerAvoid(distance)
+   * ← 联调时由 RobotDashboard._handleMessage 调用
+   *   当成员A（经C）发来 type:"obstacle" 消息时触发
+   * 直接跳过仿真检测，执行真实避障序列
+   * @param {number} distance - 障碍物距离（米）
+   */
+  function triggerAvoid(distance) {
+    if (_state !== STATE.IDLE) {
+      LogSystem.warning('ObstacleAvoidance', `收到障碍信号但当前状态为${_state}，忽略`);
+      return;
+    }
+    _active       = true;
+    _detectedDist = distance;
+    StatusManager.setObstacleDist(distance);
+
+    const det = document.getElementById('detection-label');
+    if (det) det.textContent = `⚠ OBSTACLE ${distance.toFixed(2)}m`;
+
+    LogSystem.warning('ObstacleAvoidance',
+      `收到A的障碍信号，距离${distance}m，启动避障序列`
+    );
+    _executeAvoidSequence();
+  }
+
+  /**
+   * stop() — 紧急停止时调用
    */
   function stop() {
     _active = false;
@@ -426,7 +452,7 @@ const ObstacleAvoidance = (() => {
     StatusManager.setObstacleDist(null);
     const det = document.getElementById('detection-label');
     if (det) det.textContent = '';
-    LogSystem.warn('视觉避障功能已停止');
+    LogSystem.warning('ObstacleAvoidance', '视觉避障已停止');
   }
 
   /** 当前是否激活 */
@@ -435,5 +461,5 @@ const ObstacleAvoidance = (() => {
   /** 当前状态 */
   function getState() { return _state; }
 
-  return { init, start, stop, isActive, getState, STATE };
+  return { init, start, stop, triggerAvoid, isActive, getState, STATE };
 })();
